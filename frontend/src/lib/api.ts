@@ -3,8 +3,7 @@
  * Configured with VITE_API_BASE_URL (defaults to http://localhost:5000)
  */
 
-const rawBaseUrl = (((import.meta as any).env?.VITE_API_BASE_URL as string) || '').trim();
-const API_BASE_URL = rawBaseUrl.replace(/\/+$/, '') || 'http://localhost:5000';
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000').replace(/\/+$/, '');
 
 export async function fetchJson<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const url = `${API_BASE_URL}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;
