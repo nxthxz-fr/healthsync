@@ -306,8 +306,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <tbody className="divide-y divide-slate-200 font-medium text-slate-700">
               {sortedPatients.length > 0 ? (
                 sortedPatients.map((patient) => {
-                  const vitals = patient.currentVitals;
-                  const isOnline = patient.deviceStatus === 'online';
+                  const isHardwareActive = patient.sourceMode === 'LIVE_HARDWARE' || patient.currentVitals?.source === 'LIVE_HARDWARE' || (patient as any).vitals?.dataMode === 'HARDWARE';
+                  const isOnline = patient.deviceStatus === 'online' || isHardwareActive;
+                  const vitals = patient.currentVitals || (patient as any).vitals;
                   const risk = patient.currentRisk;
                   const badge = getRiskBadge(risk?.riskLevel);
                   const isCritical = risk?.riskLevel === 'CRITICAL';
@@ -338,7 +339,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
                       {/* Heart Rate */}
                       <td className="py-3 px-3">
-                        {isOnline && vitals ? (
+                        {isOnline && vitals && vitals.heartRate != null ? (
                           <div className="flex items-baseline gap-1">
                             <span
                               className={`text-sm font-extrabold font-mono ${
@@ -361,7 +362,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
                       {/* SpO2 */}
                       <td className="py-3 px-3">
-                        {isOnline && vitals ? (
+                        {isOnline && vitals && vitals.spo2 ? (
                           <div className="flex items-baseline gap-1">
                             <span
                               className={`text-sm font-extrabold font-mono ${
@@ -374,6 +375,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                             >
                               {vitals.spo2}%
                             </span>
+                            <span className="text-[9px] text-indigo-500 font-mono">sim</span>
                           </div>
                         ) : (
                           <span className="font-mono text-slate-400">--</span>
@@ -385,13 +387,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
                       {/* Temperature */}
                       <td className="py-3 px-3">
-                        {isOnline && vitals ? (
+                        {isOnline && vitals && vitals.temperature != null ? (
                           <span
                             className={`font-mono font-bold ${
                               vitals.temperature >= 38.3 ? 'text-rose-600' : 'text-slate-900'
                             }`}
                           >
-                            {vitals.temperature.toFixed(1)}°C
+                            {Number(vitals.temperature).toFixed(1)}°C
                           </span>
                         ) : (
                           <span className="font-mono text-slate-400">--</span>
@@ -408,8 +410,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                                 : 'bg-amber-50 text-amber-800 border border-amber-200'
                             }`}
                           >
-                            {vitals.signalQuality.ecgQuality === 'no_signal'
+                            {vitals.signalQuality?.ecgQuality === 'no_signal'
                               ? 'Not Analyzed'
+                              : isHardwareActive
+                              ? 'Sinus Rhythm (Sim)'
                               : vitals.ecgRhythmDescription || 'Sinus Rhythm'}
                           </span>
                         ) : (

@@ -227,14 +227,14 @@ export const LiveEcgMonitor: React.FC<LiveEcgMonitorProps> = ({
                 Live ECG Oscilloscope (Lead II)
               </h3>
               <span className="text-[10px] font-mono font-extrabold px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">
-                SIMULATED ECG — DEMO DATA
+                SIMULATED ECG — NO BODY ELECTRODES
               </span>
               <span className={`text-[10px] font-mono font-semibold px-2 py-0.5 rounded border ${qualityBadge.bg}`}>
                 {qualityBadge.text}
               </span>
             </div>
             <p className="text-xs text-slate-500 font-mono">
-              250 Hz Continuous Sampling • Mathematical P-Q-R-S-T Synthesis • Filter: 0.05 - 150 Hz
+              Simulated Waveform • No Body Electrodes Connected (Lead II Synthesis) • Filter: 0.05 - 150 Hz
             </p>
           </div>
         </div>
@@ -273,7 +273,7 @@ export const LiveEcgMonitor: React.FC<LiveEcgMonitorProps> = ({
           <span>Gain: 10 mm/mV</span>
           <span className="font-semibold text-teal-700">Lead II</span>
           <span className="text-slate-400">|</span>
-          <span className="font-semibold text-indigo-700">SIMULATED ECG — DEMO DATA</span>
+          <span className="font-semibold text-indigo-700">SIMULATED ECG — NO ELECTRODES</span>
         </div>
 
         <div className="absolute top-2 right-3 flex items-center gap-2">

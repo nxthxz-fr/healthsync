@@ -53,53 +53,56 @@ export function calculateRiskAnalysis(
   let hrPoints = 0;
   let hrSeverity: 'normal' | 'minor' | 'moderate' | 'severe' = 'normal';
   let hrObs = 'Heart rate within acceptable parameters.';
-  const hrBaselineDelta = hr - baseline.hrMean;
 
-  if (hr < 40) {
-    hrPoints = 35;
-    hrSeverity = 'severe';
-    hrObs = `Severe life-threatening bradycardia (${hr} BPM).`;
-  } else if (hr < 50) {
-    hrPoints = 25;
-    hrSeverity = 'moderate';
-    hrObs = `Marked bradycardia (${hr} BPM).`;
-  } else if (hr < 60) {
-    if (baseline.hrMin > 62) {
-      hrPoints = 12;
-      hrSeverity = 'minor';
-      hrObs = `Mild sinus bradycardia below patient baseline range (${baseline.hrMin}-${baseline.hrMax} BPM).`;
+  if (hr !== null) {
+    const hrBaselineDelta = hr - baseline.hrMean;
+
+    if (hr < 40) {
+      hrPoints = 35;
+      hrSeverity = 'severe';
+      hrObs = `Severe life-threatening bradycardia (${hr} BPM).`;
+    } else if (hr < 50) {
+      hrPoints = 25;
+      hrSeverity = 'moderate';
+      hrObs = `Marked bradycardia (${hr} BPM).`;
+    } else if (hr < 60) {
+      if (baseline.hrMin > 62) {
+        hrPoints = 12;
+        hrSeverity = 'minor';
+        hrObs = `Mild sinus bradycardia below patient baseline range (${baseline.hrMin}-${baseline.hrMax} BPM).`;
+      }
+    } else if (hr > 135) {
+      hrPoints = 35;
+      hrSeverity = 'severe';
+      hrObs = `Severe tachycardia (${hr} BPM), extreme cardiac workload.`;
+    } else if (hr > 115) {
+      hrPoints = 25;
+      hrSeverity = 'moderate';
+      hrObs = `Moderate tachycardia (${hr} BPM).`;
+    } else if (hr > 95) {
+      if (hr > baseline.hrMax + 10) {
+        hrPoints = 14;
+        hrSeverity = 'minor';
+        hrObs = `Elevated heart rate (+${Math.round(hrBaselineDelta)} BPM over personal baseline).`;
+      }
     }
-  } else if (hr > 135) {
-    hrPoints = 35;
-    hrSeverity = 'severe';
-    hrObs = `Severe tachycardia (${hr} BPM), extreme cardiac workload.`;
-  } else if (hr > 115) {
-    hrPoints = 25;
-    hrSeverity = 'moderate';
-    hrObs = `Moderate tachycardia (${hr} BPM).`;
-  } else if (hr > 95) {
-    if (hr > baseline.hrMax + 10) {
-      hrPoints = 14;
-      hrSeverity = 'minor';
-      hrObs = `Elevated heart rate (+${Math.round(hrBaselineDelta)} BPM over personal baseline).`;
+
+    // Add baseline deviation penalty if significant
+    if (Math.abs(hrBaselineDelta) > 25 && hrPoints < 25) {
+      hrPoints += 8;
     }
-  }
 
-  // Add baseline deviation penalty if significant
-  if (Math.abs(hrBaselineDelta) > 25 && hrPoints < 25) {
-    hrPoints += 8;
-  }
-
-  if (hrPoints > 0) {
-    factors.push({
-      parameter: 'HEART_RATE',
-      label: 'Heart Rate Deviation',
-      points: hrPoints,
-      severity: hrSeverity,
-      observation: hrObs,
-      deviationText: `${hrBaselineDelta >= 0 ? '+' : ''}${Math.round(hrBaselineDelta)} BPM from baseline (${baseline.hrMean})`,
-    });
-    totalScore += hrPoints;
+    if (hrPoints > 0) {
+      factors.push({
+        parameter: 'HEART_RATE',
+        label: 'Heart Rate Deviation',
+        points: hrPoints,
+        severity: hrSeverity,
+        observation: hrObs,
+        deviationText: `${hrBaselineDelta >= 0 ? '+' : ''}${Math.round(hrBaselineDelta)} BPM from baseline (${baseline.hrMean})`,
+      });
+      totalScore += hrPoints;
+    }
   }
 
   // 3. SpO2 OXYGEN SATURATION ANALYSIS
@@ -246,36 +249,39 @@ export function calculateRiskAnalysis(
     }
 
     // HR Slope: Check if consistently escalating
-    const firstHR = recentHRs[0];
-    const lastHR = recentHRs[recentHRs.length - 1];
-    const hrDiff = lastHR - firstHR;
+    const validHRs = recentHRs.filter((h): h is number => h != null);
+    if (validHRs.length >= 2) {
+      const firstHR = validHRs[0];
+      const lastHR = validHRs[validHRs.length - 1];
+      const hrDiff = lastHR - firstHR;
 
-    if (hrDiff >= 20) {
-      hrTrend = 'RAPID_CLIMB';
-      const trendPts = 15;
-      totalScore += trendPts;
-      factors.push({
-        parameter: 'TREND',
-        label: 'Sustained Tachycardic Escalation',
-        points: trendPts,
-        severity: 'severe',
-        observation: `Rapid heart rate acceleration (${recentHRs.join(' → ')} BPM).`,
-        deviationText: `+${hrDiff} BPM climb`,
-      });
-      trendNotes.push('Accelerating heart rate');
-    } else if (hrDiff >= 12) {
-      hrTrend = 'RISING';
-      const trendPts = 7;
-      totalScore += trendPts;
-      factors.push({
-        parameter: 'TREND',
-        label: 'Upward Heart Rate Trend',
-        points: trendPts,
-        severity: 'minor',
-        observation: `Sustained upward heart rate trajectory (${recentHRs.join(' → ')} BPM).`,
-        deviationText: `+${hrDiff} BPM climb`,
-      });
-      trendNotes.push('Upward heart rate trajectory');
+      if (hrDiff >= 20) {
+        hrTrend = 'RAPID_CLIMB';
+        const trendPts = 15;
+        totalScore += trendPts;
+        factors.push({
+          parameter: 'TREND',
+          label: 'Sustained Tachycardic Escalation',
+          points: trendPts,
+          severity: 'severe',
+          observation: `Rapid heart rate acceleration (${validHRs.join(' → ')} BPM).`,
+          deviationText: `+${hrDiff} BPM climb`,
+        });
+        trendNotes.push('Accelerating heart rate');
+      } else if (hrDiff >= 12) {
+        hrTrend = 'RISING';
+        const trendPts = 7;
+        totalScore += trendPts;
+        factors.push({
+          parameter: 'TREND',
+          label: 'Upward Heart Rate Trend',
+          points: trendPts,
+          severity: 'minor',
+          observation: `Sustained upward heart rate trajectory (${validHRs.join(' → ')} BPM).`,
+          deviationText: `+${hrDiff} BPM climb`,
+        });
+        trendNotes.push('Upward heart rate trajectory');
+      }
     }
 
     // Temp Slope
@@ -298,7 +304,7 @@ export function calculateRiskAnalysis(
 
   // 7. MULTI-PARAMETER COMPOUND RISK (Synergistic Clinical Indicators)
   // Hypoxia + Tachycardia = Classic physiologic compensation for respiratory collapse / circulatory shock
-  if (spo2 < 94 && hr > 105) {
+  if (spo2 < 94 && hr !== null && hr > 105) {
     const compoundPts = 16;
     totalScore += compoundPts;
     factors.push({
@@ -312,7 +318,7 @@ export function calculateRiskAnalysis(
   }
 
   // Fever + Tachycardia = Systemic Inflammatory Response / Sepsis Risk
-  if (temp >= 38.3 && hr >= 110) {
+  if (temp >= 38.3 && hr !== null && hr >= 110) {
     const sepsisBonus = 12;
     totalScore += sepsisBonus;
     factors.push({

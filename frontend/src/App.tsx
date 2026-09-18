@@ -12,7 +12,7 @@ import { SettingsView } from './components/SettingsView';
 import { AdminManageView } from './components/AdminManageView';
 import { ReportModal } from './components/ReportModal';
 import { LiveEcgMonitor } from './components/LiveEcgMonitor';
-import { DataSource, EmergencyAlert, IoTDevice, Patient, UserRole } from './types';
+import { DataSource, EmergencyAlert, IoTDevice, Patient, RiskAnalysisResult, RiskLevel, SignalQuality, UserRole, VitalReading } from './types';
 import { X, Activity } from 'lucide-react';
 import { api } from './lib/api';
 
@@ -28,6 +28,7 @@ export default function App() {
   const [devices, setDevices] = useState<IoTDevice[]>([]);
   const [alerts, setAlerts] = useState<EmergencyAlert[]>([]);
   const [demoMode, setDemoMode] = useState<'NORMAL' | 'ATTENTION' | 'CRITICAL'>('NORMAL');
+  const [isHardwareLive, setIsHardwareLive] = useState<boolean>(false);
   const [kpis, setKpis] = useState({
     totalPatients: 4,
     patientsCurrentlyMonitoring: 3,
@@ -49,16 +50,127 @@ export default function App() {
 
     const fetchAllData = async () => {
       try {
-        const [patientsData, devicesData, alertsData, statusData] = await Promise.all([
+        const [patientsData, devicesData, alertsData, statusData, patient001Latest] = await Promise.all([
           api.getPatients(),
           api.getDevices(),
           api.getAlerts(),
           api.getSystemStatus(),
+          api.getPatientLatest('PATIENT-001').catch(() => null),
         ]);
 
+        // Evaluate whether HEALTHSYNC-ESP32-01 telemetry is recent (stale timeout: 60s)
+        const now = Date.now();
+        const STALE_TIMEOUT_MS = 60000;
+        const esp32Device = devicesData.find((d: any) => d.deviceId === 'HEALTHSYNC-ESP32-01');
+
+        const deviceTimeMs = esp32Device?.lastSeen
+          ? new Date(esp32Device.lastSeen).getTime()
+          : (esp32Device?.lastPacketReceivedAt ? new Date(esp32Device.lastPacketReceivedAt).getTime() : 0);
+
+        const telemetryTimeMs = patient001Latest?.timestamp
+          ? new Date(patient001Latest.timestamp).getTime()
+          : 0;
+
+        const latestHwTimeMs = Math.max(deviceTimeMs, telemetryTimeMs);
+        const isHwFresh = latestHwTimeMs > 0 && (now - latestHwTimeMs < STALE_TIMEOUT_MS);
+        const hwActive = isHwFresh && (patient001Latest?.dataMode === 'HARDWARE' || esp32Device?.sourceMode === 'LIVE_HARDWARE');
+
+        setIsHardwareLive(hwActive);
+
+        // Normalize devices
+        const normalizedDevices = devicesData.map((d: any) => {
+          if (d.deviceId === 'HEALTHSYNC-ESP32-01' && hwActive) {
+            return {
+              ...d,
+              status: 'online' as const,
+              connectionStatus: 'ONLINE',
+              sourceMode: 'LIVE_HARDWARE' as const,
+              sourceLabel: 'LIVE HARDWARE',
+              isSimulated: false,
+            };
+          }
+          return d;
+        });
+
+        // Normalize patients so currentVitals and currentRisk are always populated
+        const normalizedPatients = patientsData.map((p: any) => {
+          const isTargetPatient = p.id === 'PATIENT-001' || p.patientId === 'PATIENT-001';
+          const pLatest = isTargetPatient && patient001Latest ? patient001Latest : null;
+          const rawVitals = pLatest || p.vitals || p.currentVitals;
+
+          const isPatientHwLive = isTargetPatient && hwActive;
+          const effectiveDeviceStatus: 'online' | 'offline' = isPatientHwLive
+            ? 'online'
+            : (p.deviceStatus || 'offline');
+          const effectiveSourceMode: DataSource = isPatientHwLive
+            ? 'LIVE_HARDWARE'
+            : (p.sourceMode || 'DEMO');
+
+          const hr = rawVitals?.heartRate != null ? Math.round(rawVitals.heartRate) : null;
+          const spo2 = rawVitals?.spo2 != null ? Number(rawVitals.spo2) : (p.baseline?.spo2Mean || 98.0);
+          const temp = rawVitals?.temperature != null ? Number(rawVitals.temperature) : (p.baseline?.tempMean || 36.8);
+
+          const signalQuality = typeof rawVitals?.signalQuality === 'object' && rawVitals?.signalQuality !== null
+            ? rawVitals.signalQuality
+            : {
+                overall: (rawVitals?.signalQuality || (effectiveDeviceStatus === 'online' ? 'good' : 'no_signal')) as SignalQuality,
+                hrQuality: (hr != null ? 'good' : (isPatientHwLive ? 'poor' : (effectiveDeviceStatus === 'online' ? 'good' : 'no_signal'))) as SignalQuality,
+                spo2Quality: 'good' as SignalQuality,
+                tempQuality: 'good' as SignalQuality,
+                ecgQuality: 'good' as SignalQuality,
+              };
+
+          const currentVitals: VitalReading = {
+            id: `VIT-${p.id}`,
+            patientId: p.id,
+            deviceId: p.deviceId,
+            timestamp: pLatest?.timestamp || rawVitals?.lastUpdated || rawVitals?.timestamp || p.lastTransmission || new Date().toISOString(),
+            heartRate: hr,
+            spo2,
+            temperature: temp,
+            ecgSample: rawVitals?.ecgSample || [],
+            signalQuality,
+            source: effectiveSourceMode,
+            ecgHeartRateCalc: hr ?? undefined,
+            ecgRhythmDescription: rawVitals?.ecgRhythmDescription || (effectiveDeviceStatus === 'online' ? 'Sinus Rhythm' : 'Offline'),
+          };
+
+          const currentRisk: RiskAnalysisResult = p.currentRisk || {
+            riskScore: p.riskScore ?? (rawVitals?.status === 'CRITICAL' ? 88 : rawVitals?.status === 'ATTENTION' ? 55 : 12),
+            riskLevel: (p.riskLevel || (rawVitals?.status === 'CRITICAL' ? 'CRITICAL' : rawVitals?.status === 'ATTENTION' ? 'ATTENTION' : 'STABLE')) as RiskLevel,
+            calculatedAt: currentVitals.timestamp,
+            isReliable: true,
+            factors: Array.isArray(p.riskFactors)
+              ? p.riskFactors.map((f: string) => ({
+                  parameter: 'HEART_RATE' as const,
+                  label: f,
+                  points: 0,
+                  severity: 'normal' as const,
+                  observation: f,
+                }))
+              : [],
+            trendSummary: {
+              hrTrend: 'STABLE',
+              spo2Trend: 'STABLE',
+              tempTrend: 'STABLE',
+              description: 'Continuous vital signs telemetry monitoring active.',
+            },
+            recommendation: 'Continue standard telemetry protocol.',
+          };
+
+          return {
+            ...p,
+            deviceStatus: effectiveDeviceStatus,
+            sourceMode: effectiveSourceMode,
+            lastReceivedAt: currentVitals.timestamp,
+            currentVitals,
+            currentRisk,
+          };
+        });
+
         if (isMounted) {
-          setPatients(patientsData);
-          setDevices(devicesData);
+          setPatients(normalizedPatients);
+          setDevices(normalizedDevices);
           setAlerts(alertsData);
           if (statusData && statusData.kpis) {
             setKpis(statusData.kpis);
@@ -266,26 +378,51 @@ export default function App() {
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
           setSearchQuery={setSearchQuery}
+          isHardwareLive={isHardwareLive}
         />
 
-        {/* DEMO MODE CONTROL PANEL RIBBON */}
+        {/* DEMO / LIVE HARDWARE MODE CONTROL PANEL RIBBON */}
         <div
           id="demo-mode-ribbon"
           className="bg-white border-b border-slate-200 px-6 py-2.5 flex flex-wrap items-center justify-between gap-3 shadow-2xs z-10"
         >
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-purple-100 text-purple-800 border border-purple-200 text-xs font-black tracking-wide">
-              <span className="w-2 h-2 rounded-full bg-purple-600 animate-pulse"></span>
-              DEMO MODE
-            </div>
+            {isHardwareLive ? (
+              <div
+                id="source-mode-badge"
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-black tracking-wide"
+              >
+                <span className="w-2 h-2 rounded-full bg-emerald-600 animate-ping"></span>
+                LIVE HARDWARE
+              </div>
+            ) : (
+              <div
+                id="source-mode-badge"
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-purple-100 text-purple-800 border border-purple-200 text-xs font-black tracking-wide"
+              >
+                <span className="w-2 h-2 rounded-full bg-purple-600 animate-pulse"></span>
+                DEMO MODE
+              </div>
+            )}
             <div className="text-xs text-slate-500">
-              <span className="font-semibold text-slate-700">Simulated Vitals Engine:</span>{' '}
-              <span className="text-slate-500 hidden sm:inline">Values transition gradually (no sudden jumps).</span>
+              {isHardwareLive ? (
+                <>
+                  <span className="font-semibold text-emerald-700">ESP32 Live Telemetry Active:</span>{' '}
+                  <span className="text-slate-600 hidden sm:inline">
+                    Streaming live DS18B20 temp and pulse sensor data from HEALTHSYNC-ESP32-01.
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="font-semibold text-slate-700">Simulated Vitals Engine:</span>{' '}
+                  <span className="text-slate-500 hidden sm:inline">Values transition gradually (no sudden jumps).</span>
+                </>
+              )}
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-400 font-mono hidden md:inline">Mode:</span>
+            <span className="text-xs text-slate-400 font-mono hidden md:inline">Demo Fallback:</span>
             <div className="inline-flex rounded-lg p-1 bg-slate-100 border border-slate-200 text-xs font-bold">
               <button
                 id="btn-demo-normal"

@@ -64,8 +64,9 @@ export const LiveMonitoringView: React.FC<LiveMonitoringViewProps> = ({
       {/* Bedside Monitors Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {patients.map((patient) => {
-          const vitals = patient.currentVitals;
-          const isOnline = patient.deviceStatus === 'online';
+          const isHardwareActive = patient.sourceMode === 'LIVE_HARDWARE' || patient.currentVitals?.source === 'LIVE_HARDWARE' || (patient as any).vitals?.dataMode === 'HARDWARE';
+          const isOnline = patient.deviceStatus === 'online' || isHardwareActive;
+          const vitals = patient.currentVitals || (patient as any).vitals;
           const risk = patient.currentRisk;
           const badge = getRiskBadge(risk?.riskLevel);
           const isCritical = risk?.riskLevel === 'CRITICAL';
@@ -115,12 +116,12 @@ export const LiveMonitoringView: React.FC<LiveMonitoringViewProps> = ({
                   <div className="flex items-baseline gap-1 mt-1">
                     <span
                       className={`text-xl font-extrabold font-mono ${
-                        vitals && (vitals.heartRate > 110 || vitals.heartRate < 50)
+                        vitals && vitals.heartRate != null && (vitals.heartRate > 110 || vitals.heartRate < 50)
                           ? 'text-rose-600'
                           : 'text-slate-900'
                       }`}
                     >
-                      {isOnline && vitals ? vitals.heartRate : '--'}
+                      {isOnline && vitals && vitals.heartRate != null ? vitals.heartRate : '--'}
                     </span>
                     <span className="text-[10px] text-slate-400 font-mono">BPM</span>
                   </div>
@@ -128,9 +129,12 @@ export const LiveMonitoringView: React.FC<LiveMonitoringViewProps> = ({
 
                 {/* SpO2 */}
                 <div className="p-2 rounded-lg bg-slate-50 border border-slate-200/80">
-                  <div className="flex items-center gap-1 text-slate-400 text-[10px] uppercase font-bold">
-                    <Wind className="w-3 h-3 text-teal-600" />
-                    <span>SpO₂</span>
+                  <div className="flex items-center justify-between text-slate-400 text-[10px] uppercase font-bold">
+                    <div className="flex items-center gap-1">
+                      <Wind className="w-3 h-3 text-teal-600" />
+                      <span>SpO₂</span>
+                    </div>
+                    <span className="text-[8px] font-mono text-indigo-600 font-semibold">SIM</span>
                   </div>
                   <div className="flex items-baseline gap-1 mt-1">
                     <span
@@ -142,7 +146,7 @@ export const LiveMonitoringView: React.FC<LiveMonitoringViewProps> = ({
                           : 'text-slate-900'
                       }`}
                     >
-                      {isOnline && vitals ? vitals.spo2 : '--'}
+                      {isOnline && vitals && vitals.spo2 ? vitals.spo2 : '--'}
                     </span>
                     <span className="text-[10px] text-slate-400 font-mono">%</span>
                   </div>
@@ -150,9 +154,14 @@ export const LiveMonitoringView: React.FC<LiveMonitoringViewProps> = ({
 
                 {/* Temp */}
                 <div className="p-2 rounded-lg bg-slate-50 border border-slate-200/80">
-                  <div className="flex items-center gap-1 text-slate-400 text-[10px] uppercase font-bold">
-                    <Thermometer className="w-3 h-3 text-cyan-600" />
-                    <span>Temp</span>
+                  <div className="flex items-center justify-between text-slate-400 text-[10px] uppercase font-bold">
+                    <div className="flex items-center gap-1">
+                      <Thermometer className="w-3 h-3 text-cyan-600" />
+                      <span>Temp</span>
+                    </div>
+                    {isHardwareActive && (
+                      <span className="text-[8px] font-mono text-emerald-700 font-semibold">DS18B20</span>
+                    )}
                   </div>
                   <div className="flex items-baseline gap-1 mt-1">
                     <span
@@ -160,7 +169,7 @@ export const LiveMonitoringView: React.FC<LiveMonitoringViewProps> = ({
                         vitals && vitals.temperature >= 38.3 ? 'text-rose-600' : 'text-slate-900'
                       }`}
                     >
-                      {isOnline && vitals ? vitals.temperature.toFixed(1) : '--'}
+                      {isOnline && vitals && vitals.temperature != null ? Number(vitals.temperature).toFixed(1) : '--'}
                     </span>
                     <span className="text-[10px] text-slate-400 font-mono">°C</span>
                   </div>
@@ -173,8 +182,10 @@ export const LiveMonitoringView: React.FC<LiveMonitoringViewProps> = ({
                   <Activity className="w-3.5 h-3.5 text-teal-700" />
                   <span className="font-mono font-medium truncate max-w-44">
                     {isOnline && vitals
-                      ? vitals.signalQuality.ecgQuality === 'no_signal'
+                      ? vitals.signalQuality?.ecgQuality === 'no_signal'
                         ? 'Not Analyzed'
+                        : isHardwareActive
+                        ? 'Normal Sinus Rhythm (Simulated)'
                         : vitals.ecgRhythmDescription || 'Sinus Rhythm'
                       : 'Telemetry Suspended'}
                   </span>

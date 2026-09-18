@@ -24,6 +24,7 @@ interface HeaderProps {
   systemStatusText?: string;
   hasCriticalAlert?: boolean;
   onSelectPatientById?: (patientId: string) => void;
+  isHardwareLive?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -36,6 +37,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenAlerts = () => {},
   systemStatusText = 'All Services Operational',
   hasCriticalAlert = false,
+  isHardwareLive = false,
 }) => {
   const [currentTime, setCurrentTime] = useState<string>('');
   const handleSearchChange = onSearchChange || setSearchQuery || (() => {});
@@ -98,6 +100,19 @@ export const Header: React.FC<HeaderProps> = ({
           <Clock className="w-3.5 h-3.5 text-slate-400" />
           <span>{currentTime || 'Loading clock...'}</span>
         </div>
+
+        {/* Source Mode Indicator */}
+        {isHardwareLive ? (
+          <div id="header-source-badge" className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-teal-50 text-teal-800 border border-teal-200 text-xs font-bold">
+            <span className="w-2 h-2 rounded-full bg-teal-600 animate-pulse"></span>
+            <span>LIVE HARDWARE</span>
+          </div>
+        ) : (
+          <div id="header-source-badge" className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-purple-50 text-purple-800 border border-purple-200 text-xs font-bold">
+            <span className="w-2 h-2 rounded-full bg-purple-500"></span>
+            <span>DEMO MODE</span>
+          </div>
+        )}
 
         {/* Global System Status: All Services Operational */}
         <div className="flex items-center gap-2 text-xs font-semibold px-2.5 py-1.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200">

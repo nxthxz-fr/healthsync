@@ -122,7 +122,13 @@ export const VitalCards: React.FC<VitalCardsProps> = ({
           </div>
         </div>
 
-        {quality?.hrQuality === 'poor' && (
+        {isOnline && hr === null && (
+          <div className="mt-2.5 p-2 rounded bg-amber-50 border border-amber-200 text-[11px] text-amber-800 flex items-center gap-1.5">
+            <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+            <span>No finger detected on pulse sensor: place finger firmly on sensor.</span>
+          </div>
+        )}
+        {quality?.hrQuality === 'poor' && hr !== null && (
           <div className="mt-2.5 p-2 rounded bg-amber-50 border border-amber-200 text-[11px] text-amber-800 flex items-center gap-1.5">
             <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
             <span>Artifact on pulse sensor: ensure finger is seated.</span>
@@ -141,11 +147,11 @@ export const VitalCards: React.FC<VitalCardsProps> = ({
               <div className="flex items-center gap-1.5">
                 <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">SpO₂ Oxygen Saturation</h4>
                 <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">
-                  {patient.sourceMode === 'LIVE_HARDWARE' ? 'MAX30102 SENSOR' : 'SIMULATED SpO2'}
+                  SIMULATED SpO2
                 </span>
               </div>
               <p className="text-[11px] text-slate-400 font-mono">
-                {patient.sourceMode === 'LIVE_HARDWARE' ? 'Dual-Wavelength Pulse Oximeter' : 'Simulated O2 Saturation Engine'}
+                Simulated O₂ Saturation (No MAX30102 connected)
               </p>
             </div>
           </div>
@@ -165,7 +171,7 @@ export const VitalCards: React.FC<VitalCardsProps> = ({
               spo2 < 92 ? 'text-rose-600' : spo2 < 95 ? 'text-amber-600' : 'text-slate-900'
             }`}
           >
-            {isOnline && quality?.spo2Quality !== 'no_signal' ? spo2 : '--'}
+            {isOnline && spo2 ? spo2 : '--'}
           </span>
           <span className="text-xs font-semibold text-slate-500">%</span>
           <div className="ml-auto">
@@ -214,11 +220,11 @@ export const VitalCards: React.FC<VitalCardsProps> = ({
                     ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                     : 'bg-indigo-50 text-indigo-700 border-indigo-200'
                 }`}>
-                  {patient.sourceMode === 'LIVE_HARDWARE' ? 'DS18B20 SENSOR' : 'SIMULATED TEMPERATURE'}
+                  {patient.sourceMode === 'LIVE_HARDWARE' ? 'DS18B20 LIVE SENSOR' : 'SIMULATED TEMPERATURE'}
                 </span>
               </div>
               <p className="text-[11px] text-slate-400 font-mono">
-                {patient.sourceMode === 'LIVE_HARDWARE' ? 'DS18B20 Digital Surface Probe' : 'Continuous Thermal Simulator'}
+                {patient.sourceMode === 'LIVE_HARDWARE' ? 'DS18B20 Digital Surface Probe (GPIO 4)' : 'Continuous Thermal Simulator'}
               </p>
             </div>
           </div>
@@ -238,14 +244,14 @@ export const VitalCards: React.FC<VitalCardsProps> = ({
               temp >= 38.3 ? 'text-rose-600' : temp >= 37.8 ? 'text-amber-600' : 'text-slate-900'
             }`}
           >
-            {isOnline && quality?.tempQuality !== 'no_signal' ? temp.toFixed(1) : '--'}
+            {isOnline && temp > 0 ? temp.toFixed(1) : '--'}
           </span>
           <span className="text-xs font-semibold text-slate-500">°C</span>
           <span className="text-xs font-mono text-slate-400">
-            ({isOnline && quality?.tempQuality !== 'no_signal' ? tempF.toFixed(1) : '--'}°F)
+            ({isOnline && temp > 0 ? tempF.toFixed(1) : '--'}°F)
           </span>
           <div className="ml-auto">
-            {isOnline && quality?.tempQuality !== 'no_signal' && renderTrendIcon(temp, hrBaseline.tempMean, true)}
+            {isOnline && temp > 0 && renderTrendIcon(temp, hrBaseline.tempMean, true)}
           </div>
         </div>
 

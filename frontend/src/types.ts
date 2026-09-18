@@ -8,7 +8,7 @@ export interface VitalReading {
   patientId: string;
   deviceId: string;
   timestamp: string; // ISO string
-  heartRate: number; // BPM
+  heartRate: number | null; // BPM (null when no finger detected)
   spo2: number; // %
   temperature: number; // °C
   ecgSample: number[]; // Array of mV values for waveform
