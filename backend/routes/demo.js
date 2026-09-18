@@ -78,7 +78,12 @@ router.post('/mode', async (req, res) => {
         WHERE patientId = 'PATIENT-001' AND acknowledged = 0
       `).run();
     } else if (updated.mode === 'CRITICAL' || updated.mode === 'ATTENTION') {
-      // If ATTENTION or CRITICAL selected, trigger alert for PATIENT-001 so it surfaces immediately on dashboard
+      // If ATTENTION or CRITICAL selected, clear throttle for PATIENT-001 so demo alert triggers immediately
+      for (const key of healthStatusService.recentAlertTimestamps.keys()) {
+        if (key.startsWith('PATIENT-001_')) {
+          healthStatusService.recentAlertTimestamps.delete(key);
+        }
+      }
       await healthStatusService.evaluateAndGenerateAlerts({
         patientId: 'PATIENT-001',
         deviceId: 'HEALTHSYNC-ESP32-01',

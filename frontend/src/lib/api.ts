@@ -3,7 +3,13 @@
  * Configured with VITE_API_BASE_URL (defaults to http://localhost:5000)
  */
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000').replace(/\/+$/, '');
+const FALLBACK_PROD_URL = 'https://healthsync-backend-ulqj.onrender.com';
+const FALLBACK_DEV_URL = 'http://localhost:5000';
+
+const API_BASE_URL = (
+  import.meta.env.VITE_API_BASE_URL ||
+  (import.meta.env.PROD ? FALLBACK_PROD_URL : FALLBACK_DEV_URL)
+).replace(/\/+$/, '');
 
 export async function fetchJson<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const url = `${API_BASE_URL}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;

@@ -12,20 +12,162 @@ import { SettingsView } from './components/SettingsView';
 import { AdminManageView } from './components/AdminManageView';
 import { ReportModal } from './components/ReportModal';
 import { LiveEcgMonitor } from './components/LiveEcgMonitor';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { DataSource, EmergencyAlert, IoTDevice, Patient, RiskAnalysisResult, RiskLevel, SignalQuality, UserRole, VitalReading } from './types';
-import { X, Activity } from 'lucide-react';
+import { X, Activity, AlertTriangle } from 'lucide-react';
 import { api } from './lib/api';
 
+// Route parsing helper to support direct navigation, browser refresh, and query parameters
+const parseCurrentRoute = () => {
+  if (typeof window === 'undefined') return { tab: 'dashboard', patientId: null };
+
+  const searchParams = new URLSearchParams(window.location.search);
+  const hash = window.location.hash || '';
+  const pathname = window.location.pathname || '';
+
+  // 1. Pathname matches: /monitor/:id, /patient/:id, /patients/:id, /patient-details/:id
+  const pathMatch = pathname.match(/^\/(?:monitor|patient|patients|patient-details)\/([^/?#]+)/i);
+  if (pathMatch && pathMatch[1]) {
+    return { tab: 'patient-details', patientId: decodeURIComponent(pathMatch[1]) };
+  }
+
+  // 2. Hash matches: #/monitor/:id or #monitor/:id
+  const hashMatch = hash.match(/^#\/?(?:monitor|patient|patients|patient-details)\/([^/?#]+)/i);
+  if (hashMatch && hashMatch[1]) {
+    return { tab: 'patient-details', patientId: decodeURIComponent(hashMatch[1]) };
+  }
+
+  // 3. Query params: ?patientId=PATIENT-001 or ?patient=PATIENT-001 or ?id=PATIENT-001
+  const qPatientId = searchParams.get('patientId') || searchParams.get('patient') || searchParams.get('id');
+  if (qPatientId) {
+    return { tab: 'patient-details', patientId: qPatientId };
+  }
+
+  // 4. Other standard tabs by path or query: /live-monitoring, /alerts, /devices, etc.
+  const knownTabs = ['dashboard', 'live-monitoring', 'alerts', 'devices', 'ai-insights', 'records', 'patients', 'reports', 'admin', 'admin-manage', 'settings'];
+  const cleanPath = pathname.replace(/^\/+|\/+$/g, '').toLowerCase();
+  if (knownTabs.includes(cleanPath)) {
+    return { tab: cleanPath, patientId: null };
+  }
+  const qTab = searchParams.get('tab');
+  if (qTab && knownTabs.includes(qTab.toLowerCase())) {
+    return { tab: qTab.toLowerCase(), patientId: null };
+  }
+
+  return { tab: 'dashboard', patientId: null };
+};
+
+const DEFAULT_DEMO_PATIENTS: Patient[] = [
+  {
+    id: 'PATIENT-001',
+    name: 'Demo Patient',
+    age: 25,
+    gender: 'Male',
+    bloodGroup: 'O+',
+    roomBed: 'Cardio Telemetry Ward',
+    emergencyContact: {
+      name: 'Emergency Contact',
+      relationship: 'Next of Kin',
+      phone: '000-000-0000',
+    },
+    assignedDoctor: 'Dr. Sarah Chen, MD (Cardiology)',
+    medicalConditions: ['Sinus Arrhythmia', 'Cardiac Telemetry Observation'],
+    allergies: ['Penicillin (Moderate rash)'],
+    currentMedications: ['Metoprolol 25mg Daily', 'Aspirin 81mg Daily'],
+    deviceId: 'HEALTHSYNC-ESP32-01',
+    deviceStatus: 'online',
+    sourceMode: 'DEMO',
+    lastReceivedAt: new Date().toISOString(),
+    baseline: {
+      hrMin: 65,
+      hrMax: 85,
+      hrMean: 75,
+      spo2Min: 96,
+      spo2Max: 99,
+      spo2Mean: 97.5,
+      tempMin: 36.4,
+      tempMax: 37.1,
+      tempMean: 36.8,
+      calculatedFromSamples: 1400,
+      lastBaselineUpdate: new Date().toISOString(),
+    },
+    notes: [
+      {
+        id: 'NOTE-1',
+        author: 'Attending Physician',
+        timestamp: new Date().toISOString(),
+        category: 'ROUTINE',
+        content: 'Demo patient for telemetry presentation. MARKED AS DEMO DATA.',
+      },
+    ],
+    currentVitals: {
+      id: 'VIT-PATIENT-001',
+      patientId: 'PATIENT-001',
+      deviceId: 'HEALTHSYNC-ESP32-01',
+      timestamp: new Date().toISOString(),
+      heartRate: 76,
+      spo2: 98.2,
+      temperature: 36.8,
+      ecgSample: [],
+      signalQuality: {
+        overall: 'good',
+        hrQuality: 'good',
+        spo2Quality: 'good',
+        tempQuality: 'good',
+        ecgQuality: 'good',
+      },
+      source: 'DEMO',
+      ecgHeartRateCalc: 76,
+      ecgRhythmDescription: 'Normal Sinus Rhythm',
+    },
+    currentRisk: {
+      riskScore: 12,
+      riskLevel: 'STABLE',
+      calculatedAt: new Date().toISOString(),
+      isReliable: true,
+      factors: [],
+      trendSummary: {
+        hrTrend: 'STABLE',
+        spo2Trend: 'STABLE',
+        tempTrend: 'STABLE',
+        description: 'Continuous vital signs telemetry monitoring active.',
+      },
+      recommendation: 'Continue standard telemetry protocol.',
+    },
+  },
+];
+
+const DEFAULT_DEMO_DEVICES: IoTDevice[] = [
+  {
+    deviceId: 'HEALTHSYNC-ESP32-01',
+    patientId: 'PATIENT-001',
+    patientName: 'Demo Patient',
+    status: 'online',
+    batteryLevel: 94,
+    firmwareVersion: 'v2.4.1-clinical',
+    ipAddress: '192.168.1.101',
+    macAddress: 'C4:4F:33:18:A2:9C',
+    rssiDbm: -62,
+    lastPacketReceivedAt: new Date().toISOString(),
+    packetRateHz: 1.0,
+    totalPacketsSent: 4200,
+    sourceMode: 'DEMO',
+    sourceLabel: 'SOURCE MODE: DEMO / SIMULATION',
+    isSimulated: true,
+  },
+];
+
 export default function App() {
+  const initialRoute = parseCurrentRoute();
   const [role, setRole] = useState<UserRole>('DOCTOR');
-  const [activeTab, setActiveTab] = useState<string>('dashboard');
+  const [activeTab, setActiveTab] = useState<string>(initialRoute.tab);
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   // Core Clinical State
-  const [patients, setPatients] = useState<Patient[]>([]);
-  const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
+  const [patients, setPatients] = useState<Patient[]>(DEFAULT_DEMO_PATIENTS);
+  const [selectedPatientId, setSelectedPatientId] = useState<string | null>(initialRoute.patientId);
   const [selectedPatientHistory, setSelectedPatientHistory] = useState<any[]>([]);
-  const [devices, setDevices] = useState<IoTDevice[]>([]);
+  const [devices, setDevices] = useState<IoTDevice[]>(DEFAULT_DEMO_DEVICES);
   const [alerts, setAlerts] = useState<EmergencyAlert[]>([]);
   const [demoMode, setDemoMode] = useState<'NORMAL' | 'ATTENTION' | 'CRITICAL'>('NORMAL');
   const [isHardwareLive, setIsHardwareLive] = useState<boolean>(false);
@@ -41,7 +183,7 @@ export default function App() {
   // UI Modals
   const [reportModalPatient, setReportModalPatient] = useState<Patient | null>(null);
   const [quickEcgPatient, setQuickEcgPatient] = useState<Patient | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
   // Periodic Telemetry Polling (1.0 second as specified in Section 20)
@@ -94,7 +236,8 @@ export default function App() {
 
         // Normalize patients so currentVitals and currentRisk are always populated
         const normalizedPatients = patientsData.map((p: any) => {
-          const isTargetPatient = p.id === 'PATIENT-001' || p.patientId === 'PATIENT-001';
+          const patientId = p.id || p.patientId;
+          const isTargetPatient = patientId === 'PATIENT-001';
           const pLatest = isTargetPatient && patient001Latest ? patient001Latest : null;
           const rawVitals = pLatest || p.vitals || p.currentVitals;
 
@@ -121,9 +264,9 @@ export default function App() {
               };
 
           const currentVitals: VitalReading = {
-            id: `VIT-${p.id}`,
-            patientId: p.id,
-            deviceId: p.deviceId,
+            id: `VIT-${patientId}`,
+            patientId: patientId,
+            deviceId: p.deviceId || 'HEALTHSYNC-ESP32-01',
             timestamp: pLatest?.timestamp || rawVitals?.lastUpdated || rawVitals?.timestamp || p.lastTransmission || new Date().toISOString(),
             heartRate: hr,
             spo2,
@@ -158,8 +301,55 @@ export default function App() {
             recommendation: 'Continue standard telemetry protocol.',
           };
 
+          const emergencyContact = p.emergencyContact || {
+            name: p.emergencyContactName || 'Emergency Contact',
+            relationship: 'Next of Kin',
+            phone: p.emergencyContactPhone || p.phone || '000-000-0000',
+          };
+
+          const medicalConditions = Array.isArray(p.medicalConditions) && p.medicalConditions.length > 0
+            ? p.medicalConditions
+            : (p.medicalNotes && !p.medicalNotes.startsWith('[') && !p.medicalNotes.startsWith('Demo')
+                ? [p.medicalNotes]
+                : ['Sinus Arrhythmia', 'Cardiac Telemetry Observation']);
+
+          const allergies = Array.isArray(p.allergies) && p.allergies.length > 0
+            ? p.allergies
+            : (Array.isArray(p.clinicalSummary?.allergies) ? p.clinicalSummary.allergies : ['Penicillin (Moderate rash)']);
+
+          const currentMedications = Array.isArray(p.currentMedications) && p.currentMedications.length > 0
+            ? p.currentMedications
+            : ['Metoprolol 25mg Daily', 'Aspirin 81mg Daily'];
+
+          const assignedDoctor = p.assignedDoctor || p.doctor || 'Dr. Sarah Chen, MD (Cardiology)';
+          const notes = Array.isArray(p.notes) ? p.notes : [];
+
+          const baseline = p.baseline || {
+            hrMin: 65,
+            hrMax: 85,
+            hrMean: 75,
+            spo2Min: 96.0,
+            spo2Max: 99.0,
+            spo2Mean: 97.5,
+            tempMin: 36.4,
+            tempMax: 37.1,
+            tempMean: 36.8,
+            calculatedFromSamples: 1400,
+            lastBaselineUpdate: new Date().toISOString(),
+          };
+
           return {
             ...p,
+            id: patientId,
+            patientId: patientId,
+            name: p.name || p.fullName || 'Demo Patient',
+            assignedDoctor,
+            emergencyContact,
+            medicalConditions,
+            allergies,
+            currentMedications,
+            notes,
+            baseline,
             deviceStatus: effectiveDeviceStatus,
             sourceMode: effectiveSourceMode,
             lastReceivedAt: currentVitals.timestamp,
@@ -215,21 +405,92 @@ export default function App() {
     return () => clearInterval(historyInterval);
   }, [selectedPatientId]);
 
+  // Synchronize browser history / Back / Forward navigation
+  useEffect(() => {
+    const handlePopState = () => {
+      const route = parseCurrentRoute();
+      setActiveTab(route.tab);
+      setSelectedPatientId(route.patientId);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  // Fetch individual patient by ID if directly navigated to URL and not yet in patients array
+  useEffect(() => {
+    if (!selectedPatientId || isLoading) return;
+    const exists = patients.some((p) => p.id === selectedPatientId || (p as any).patientId === selectedPatientId);
+    if (!exists) {
+      api.getPatientById(selectedPatientId)
+        .then((singlePatient) => {
+          if (singlePatient) {
+            setPatients((prev) => {
+              if (prev.some((p) => p.id === singlePatient.patientId || p.id === singlePatient.id)) return prev;
+              const formatted: Patient = {
+                ...singlePatient,
+                id: singlePatient.patientId || singlePatient.id,
+                name: singlePatient.fullName || singlePatient.name || 'Patient',
+                assignedDoctor: singlePatient.assignedDoctor || singlePatient.doctor || 'Dr. Sarah Chen, MD (Cardiology)',
+                emergencyContact: singlePatient.emergencyContact || {
+                  name: singlePatient.emergencyContactName || 'Emergency Contact',
+                  relationship: 'Next of Kin',
+                  phone: singlePatient.emergencyContactPhone || '000-000-0000',
+                },
+                medicalConditions: singlePatient.medicalConditions || ['Sinus Arrhythmia', 'Cardiac Telemetry Observation'],
+                allergies: singlePatient.allergies || ['Penicillin (Moderate rash)'],
+                currentMedications: singlePatient.currentMedications || ['Metoprolol 25mg Daily', 'Aspirin 81mg Daily'],
+                notes: Array.isArray(singlePatient.notes) ? singlePatient.notes : [],
+                baseline: singlePatient.baseline || {
+                  hrMin: 65, hrMax: 85, hrMean: 75,
+                  spo2Min: 96, spo2Max: 99, spo2Mean: 97.5,
+                  tempMin: 36.4, tempMax: 37.1, tempMean: 36.8,
+                  calculatedFromSamples: 1400,
+                  lastBaselineUpdate: new Date().toISOString(),
+                },
+                deviceStatus: singlePatient.deviceStatus || 'online',
+                sourceMode: singlePatient.sourceMode || 'DEMO',
+                lastReceivedAt: singlePatient.lastTransmission || new Date().toISOString(),
+              };
+              return [formatted, ...prev];
+            });
+          }
+        })
+        .catch((e) => {
+          console.warn('Unable to load single patient by ID:', e);
+        });
+    }
+  }, [selectedPatientId, isLoading, patients.length]);
+
   // Selected Patient Object
-  const currentSelectedPatient = patients.find((p) => p.id === selectedPatientId) || null;
+  const currentSelectedPatient = patients.find((p) => p.id === selectedPatientId || (p as any).patientId === selectedPatientId) || null;
 
   // Unacknowledged Alert Count
   const unacknowledgedAlertsCount = alerts.filter((a) => !a.acknowledged).length;
 
+  // Router navigation helper
+  const navigateToTab = (tab: string, patientId: string | null = null, pushState: boolean = true) => {
+    setActiveTab(tab);
+    setSelectedPatientId(patientId);
+
+    if (pushState && typeof window !== 'undefined') {
+      if (tab === 'patient-details' && patientId) {
+        window.history.pushState({ tab, patientId }, '', `/monitor/${encodeURIComponent(patientId)}`);
+      } else if (tab === 'dashboard') {
+        window.history.pushState({ tab, patientId: null }, '', '/');
+      } else {
+        window.history.pushState({ tab, patientId: null }, '', `/${tab}`);
+      }
+    }
+  };
+
   // Handlers
   const handleSelectPatient = (patient: Patient) => {
-    setSelectedPatientId(patient.id);
-    setActiveTab('patient-details');
+    navigateToTab('patient-details', patient.id || (patient as any).patientId, true);
   };
 
   const handleSelectPatientById = (patientId: string) => {
-    setSelectedPatientId(patientId);
-    setActiveTab('patient-details');
+    navigateToTab('patient-details', patientId, true);
   };
 
   const handleSetDemoMode = async (mode: 'NORMAL' | 'ATTENTION' | 'CRITICAL') => {
@@ -354,8 +615,8 @@ export default function App() {
       <Sidebar
         currentTab={activeTab}
         activeTab={activeTab}
-        onSelectTab={setActiveTab}
-        setActiveTab={setActiveTab}
+        onSelectTab={(tab) => navigateToTab(tab, null, true)}
+        setActiveTab={(tab) => navigateToTab(tab, null, true)}
         userRole={role}
         setUserRole={setRole}
         onToggleRole={() => setRole((prev) => (prev === 'DOCTOR' ? 'ADMIN' : 'DOCTOR'))}
@@ -374,7 +635,7 @@ export default function App() {
           unreadAlertsCount={unacknowledgedAlertsCount}
           unacknowledgedAlertsCount={unacknowledgedAlertsCount}
           hasCriticalAlert={alerts.some((a) => !a.acknowledged && a.severity === 'CRITICAL')}
-          onOpenAlerts={() => setActiveTab('alerts')}
+          onOpenAlerts={() => navigateToTab('alerts', null, true)}
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
           setSearchQuery={setSearchQuery}
@@ -467,94 +728,164 @@ export default function App() {
         {/* Scrollable Page Body */}
         <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
           <div className="max-w-7xl mx-auto">
+            {/* BACKEND STATUS NOTICE BANNER IF TEMPORARILY SLEEPING / OFFLINE */}
+            {fetchError && (
+              <div
+                id="backend-connection-banner"
+                className="mb-4 p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex flex-wrap items-center justify-between gap-2 shadow-xs"
+              >
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>
+                    <strong className="font-semibold">Backend Reconnecting:</strong> The remote telemetry service is spinning up or unavailable ({fetchError}). Operating in resilient local demo mode with automatic reconnection.
+                  </span>
+                </div>
+                <button
+                  onClick={() => window.location.reload()}
+                  className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-md text-xs font-bold shrink-0 transition-colors cursor-pointer"
+                >
+                  Retry Connection
+                </button>
+              </div>
+            )}
+
             {/* TAB ROUTING */}
             {activeTab === 'dashboard' && (
-              <DashboardView
-                patients={patients}
-                kpis={kpis}
-                onSelectPatient={handleSelectPatient}
-                searchQuery={searchQuery}
-                onSearchChange={setSearchQuery}
-                onSelectQuickEcg={(p) => setQuickEcgPatient(p)}
-                onOpenDevices={() => setActiveTab('devices')}
-                onOpenAiInsights={() => setActiveTab('ai-insights')}
-              />
+              <ErrorBoundary fallbackMessage="Unable to render Dashboard overview.">
+                <DashboardView
+                  patients={patients}
+                  kpis={kpis}
+                  onSelectPatient={handleSelectPatient}
+                  searchQuery={searchQuery}
+                  onSearchChange={setSearchQuery}
+                  onSelectQuickEcg={(p) => setQuickEcgPatient(p)}
+                  onOpenDevices={() => setActiveTab('devices')}
+                  onOpenAiInsights={() => setActiveTab('ai-insights')}
+                />
+              </ErrorBoundary>
             )}
 
             {activeTab === 'patient-details' && (
-              currentSelectedPatient ? (
-                <PatientDetailView
-                  patient={currentSelectedPatient}
-                  onBack={() => setActiveTab('dashboard')}
-                  telemetryHistory={selectedPatientHistory}
-                  onAddNote={handleAddNote}
-                  onInjectScenario={handleInjectScenario}
-                  onGenerateAiSummary={handleGenerateAiSummary}
-                  onOpenReport={(p) => setReportModalPatient(p)}
-                />
-              ) : (
-                <div className="p-12 text-center bg-white rounded-xl border border-slate-200">
-                  <p className="text-sm font-semibold text-slate-700">No patient selected.</p>
+              isLoading && !currentSelectedPatient ? (
+                <div className="flex flex-col items-center justify-center p-16 bg-white rounded-xl border border-slate-200 shadow-xs space-y-4 text-center">
+                  <div className="w-10 h-10 border-4 border-teal-600 border-t-transparent rounded-full animate-spin"></div>
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-800">Loading patient monitor...</h3>
+                    <p className="text-xs text-slate-500 font-mono mt-1">
+                      Fetching real-time telemetry and clinical data for {selectedPatientId || 'patient'}...
+                    </p>
+                  </div>
+                </div>
+              ) : currentSelectedPatient ? (
+                <ErrorBoundary
+                  fallbackMessage="Unable to load patient monitoring data."
+                  onReset={() => navigateToTab('dashboard', null, true)}
+                >
+                  <PatientDetailView
+                    patient={currentSelectedPatient}
+                    onBack={() => navigateToTab('dashboard', null, true)}
+                    telemetryHistory={selectedPatientHistory}
+                    onAddNote={handleAddNote}
+                    onInjectScenario={handleInjectScenario}
+                    onGenerateAiSummary={handleGenerateAiSummary}
+                    onOpenReport={(p) => setReportModalPatient(p)}
+                  />
+                </ErrorBoundary>
+              ) : fetchError ? (
+                <div className="p-12 text-center bg-white rounded-xl border border-rose-200 shadow-xs space-y-3">
+                  <AlertTriangle className="w-8 h-8 text-rose-500 mx-auto" />
+                  <h3 className="text-base font-bold text-slate-900">Unable to load patient monitoring data.</h3>
+                  <p className="text-xs text-slate-500 max-w-md mx-auto">{fetchError}</p>
                   <button
-                    onClick={() => setActiveTab('dashboard')}
-                    className="mt-3 px-4 py-2 rounded-lg bg-teal-600 text-white text-xs font-bold"
+                    onClick={() => navigateToTab('dashboard', null, true)}
+                    className="mt-3 px-4 py-2 rounded-lg bg-teal-600 text-white text-xs font-bold hover:bg-teal-700 transition-colors cursor-pointer"
                   >
-                    Return to Patient Table
+                    Return to Dashboard
+                  </button>
+                </div>
+              ) : (
+                <div className="p-12 text-center bg-white rounded-xl border border-slate-200 shadow-xs space-y-3">
+                  <p className="text-sm font-semibold text-slate-700">
+                    {selectedPatientId
+                      ? `Unable to load patient monitoring data: Patient "${selectedPatientId}" was not found.`
+                      : 'No patient selected.'}
+                  </p>
+                  <button
+                    onClick={() => navigateToTab('dashboard', null, true)}
+                    className="mt-3 px-4 py-2 rounded-lg bg-teal-600 text-white text-xs font-bold hover:bg-teal-700 transition-colors cursor-pointer"
+                  >
+                    Return to Dashboard
                   </button>
                 </div>
               )
             )}
 
             {activeTab === 'live-monitoring' && (
-              <LiveMonitoringView
-                patients={patients}
-                onSelectPatient={handleSelectPatient}
-              />
+              <ErrorBoundary fallbackMessage="Unable to render Live Monitoring station.">
+                <LiveMonitoringView
+                  patients={patients}
+                  onSelectPatient={handleSelectPatient}
+                />
+              </ErrorBoundary>
             )}
 
             {activeTab === 'alerts' && (
-              <AlertsView
-                alerts={alerts}
-                patients={patients}
-                onAcknowledgeAlert={handleAcknowledgeAlert}
-                onSelectPatientById={handleSelectPatientById}
-              />
+              <ErrorBoundary fallbackMessage="Unable to render Alerts view.">
+                <AlertsView
+                  alerts={alerts}
+                  patients={patients}
+                  onAcknowledgeAlert={handleAcknowledgeAlert}
+                  onSelectPatientById={handleSelectPatientById}
+                />
+              </ErrorBoundary>
             )}
 
             {activeTab === 'devices' && (
-              <DevicesView
-                devices={devices}
-                onToggleDeviceStatus={handleToggleDeviceStatus}
-                onToggleDeviceSource={handleToggleDeviceSource}
-                onDirectTelemetryIngest={handleDirectTelemetryIngest}
-              />
+              <ErrorBoundary fallbackMessage="Unable to render Devices view.">
+                <DevicesView
+                  devices={devices}
+                  onToggleDeviceStatus={handleToggleDeviceStatus}
+                  onToggleDeviceSource={handleToggleDeviceSource}
+                  onDirectTelemetryIngest={handleDirectTelemetryIngest}
+                />
+              </ErrorBoundary>
             )}
 
             {activeTab === 'ai-insights' && (
-              <AIInsightsView
-                patients={patients}
-                onSelectPatient={handleSelectPatient}
-              />
+              <ErrorBoundary fallbackMessage="Unable to render AI Insights view.">
+                <AIInsightsView
+                  patients={patients}
+                  onSelectPatient={handleSelectPatient}
+                />
+              </ErrorBoundary>
             )}
 
             {(activeTab === 'patients' || activeTab === 'records' || activeTab === 'reports') && (
-              <PatientRecordsView
-                patients={patients}
-                onSelectPatient={handleSelectPatient}
-                onOpenReport={(p) => setReportModalPatient(p)}
-              />
+              <ErrorBoundary fallbackMessage="Unable to render Patient Records view.">
+                <PatientRecordsView
+                  patients={patients}
+                  onSelectPatient={handleSelectPatient}
+                  onOpenReport={(p) => setReportModalPatient(p)}
+                />
+              </ErrorBoundary>
             )}
 
             {(activeTab === 'admin' || activeTab === 'admin-manage') && (
-              <AdminManageView
-                patients={patients}
-                devices={devices}
-                onAddPatient={handleAddPatient}
-                onReassignDevice={handleReassignDevice}
-              />
+              <ErrorBoundary fallbackMessage="Unable to render Admin Management view.">
+                <AdminManageView
+                  patients={patients}
+                  devices={devices}
+                  onAddPatient={handleAddPatient}
+                  onReassignDevice={handleReassignDevice}
+                />
+              </ErrorBoundary>
             )}
 
-            {activeTab === 'settings' && <SettingsView />}
+            {activeTab === 'settings' && (
+              <ErrorBoundary fallbackMessage="Unable to render Settings view.">
+                <SettingsView />
+              </ErrorBoundary>
+            )}
           </div>
         </main>
       </div>

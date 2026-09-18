@@ -37,7 +37,19 @@ export const AIAnomalySection: React.FC<AIAnomalySectionProps> = ({
 }) => {
   const [pipelineStepActive, setPipelineStepActive] = useState<number | null>(null);
 
-  const baseline = patient.baseline;
+  const baseline = {
+    hrMin: patient.baseline?.hrMin ?? 60,
+    hrMax: patient.baseline?.hrMax ?? 100,
+    hrMean: patient.baseline?.hrMean ?? 75,
+    spo2Min: patient.baseline?.spo2Min ?? 95,
+    spo2Max: patient.baseline?.spo2Max ?? 100,
+    spo2Mean: patient.baseline?.spo2Mean ?? 98,
+    tempMin: patient.baseline?.tempMin ?? 36.5,
+    tempMax: patient.baseline?.tempMax ?? 37.5,
+    tempMean: patient.baseline?.tempMean ?? 36.8,
+    calculatedFromSamples: patient.baseline?.calculatedFromSamples ?? 1000,
+    lastBaselineUpdate: patient.baseline?.lastBaselineUpdate ?? '',
+  };
   const hr = vitals?.heartRate ?? baseline.hrMean;
   const spo2 = vitals?.spo2 ?? baseline.spo2Mean;
   const temp = vitals?.temperature ?? baseline.tempMean;

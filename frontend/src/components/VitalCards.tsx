@@ -21,7 +21,17 @@ export const VitalCards: React.FC<VitalCardsProps> = ({
   const tempF = temp ? (temp * 9) / 5 + 32 : 0;
   const quality = vitals?.signalQuality;
 
-  const hrBaseline = patient.baseline;
+  const hrBaseline = {
+    hrMin: patient.baseline?.hrMin ?? 60,
+    hrMax: patient.baseline?.hrMax ?? 100,
+    hrMean: patient.baseline?.hrMean ?? 75,
+    spo2Min: patient.baseline?.spo2Min ?? 95,
+    spo2Max: patient.baseline?.spo2Max ?? 100,
+    spo2Mean: patient.baseline?.spo2Mean ?? 98,
+    tempMin: patient.baseline?.tempMin ?? 36.5,
+    tempMax: patient.baseline?.tempMax ?? 37.5,
+    tempMean: patient.baseline?.tempMean ?? 36.8,
+  };
 
   // Signal quality badge formatting
   const getQualityBadge = (q?: SignalQuality) => {
@@ -260,7 +270,7 @@ export const VitalCards: React.FC<VitalCardsProps> = ({
           <div className="flex justify-between text-slate-600">
             <span>Patient Baseline:</span>
             <span className="font-mono font-semibold text-slate-800">
-              {hrBaseline.tempMin.toFixed(1)} - {hrBaseline.tempMax.toFixed(1)}°C (Avg {hrBaseline.tempMean.toFixed(1)}°C)
+              {(hrBaseline.tempMin ?? 36.5).toFixed(1)} - {(hrBaseline.tempMax ?? 37.5).toFixed(1)}°C (Avg {(hrBaseline.tempMean ?? 36.8).toFixed(1)}°C)
             </span>
           </div>
           <div className="flex justify-between text-slate-500 text-[11px]">

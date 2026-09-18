@@ -190,6 +190,17 @@ async function formatPatient(row) {
     activeAlertCount: currentStatus === 'CRITICAL' ? 2 : currentStatus === 'ATTENTION' ? 1 : 0,
     baseline,
     notes: parsedNotes,
+    emergencyContact: {
+      name: row.emergencyContactName || 'Emergency Contact',
+      relationship: 'Next of Kin',
+      phone: row.emergencyContactPhone || row.phone || 'N/A',
+    },
+    assignedDoctor: 'Dr. Sarah Chen, MD (Cardiology)',
+    medicalConditions: row.medicalNotes && !row.medicalNotes.startsWith('[') && !row.medicalNotes.startsWith('Demo')
+      ? [row.medicalNotes]
+      : ['Sinus Arrhythmia', 'Cardiac Telemetry Observation'],
+    allergies: ['Penicillin (Moderate rash)'],
+    currentMedications: ['Metoprolol 25mg Daily', 'Aspirin 81mg Daily'],
     clinicalSummary: {
       chiefComplaint: 'Continuous Cardiac & Oxygen Monitoring',
       allergies: ['Penicillin (Moderate rash)'],

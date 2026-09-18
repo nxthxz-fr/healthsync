@@ -57,9 +57,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     const query = searchQuery.toLowerCase().trim();
     if (
       query &&
-      !p.name.toLowerCase().includes(query) &&
-      !p.id.toLowerCase().includes(query) &&
-      !p.deviceId.toLowerCase().includes(query)
+      !(p.name || '').toLowerCase().includes(query) &&
+      !(p.id || '').toLowerCase().includes(query) &&
+      !(p.deviceId || '').toLowerCase().includes(query)
     ) {
       return false;
     }
@@ -92,10 +92,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       return (b.currentRisk?.riskScore ?? 0) - (a.currentRisk?.riskScore ?? 0);
     }
     if (sortBy === 'name') {
-      return a.name.localeCompare(b.name);
+      return (a.name || '').localeCompare(b.name || '');
     }
     if (sortBy === 'time') {
-      return new Date(b.lastReceivedAt).getTime() - new Date(a.lastReceivedAt).getTime();
+      return new Date(b.lastReceivedAt || 0).getTime() - new Date(a.lastReceivedAt || 0).getTime();
     }
     return 0;
   });
@@ -334,7 +334,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
                       {/* Age & Gender */}
                       <td className="py-3 px-3 font-mono">
-                        {patient.age}y <span className="text-slate-400">({patient.gender[0]})</span>
+                        {patient.age}y <span className="text-slate-400">({(patient.gender || 'M')[0]})</span>
                       </td>
 
                       {/* Heart Rate */}
@@ -356,7 +356,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                           <span className="font-mono text-slate-400">--</span>
                         )}
                         <span className="text-[10px] text-slate-400 block font-mono">
-                          Base: {patient.baseline.hrMean}
+                          Base: {patient.baseline?.hrMean ?? 75}
                         </span>
                       </td>
 
@@ -381,7 +381,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                           <span className="font-mono text-slate-400">--</span>
                         )}
                         <span className="text-[10px] text-slate-400 block font-mono">
-                          Base: {patient.baseline.spo2Mean}%
+                          Base: {patient.baseline?.spo2Mean ?? 98}%
                         </span>
                       </td>
 
