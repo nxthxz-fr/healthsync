@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: healthsync-backend
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: FRONTEND_URL
+        value: "*"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: healthsync-db
+          property: connectionString
+      - key: DEVICE_OFFLINE_TIMEOUT_MS
+        value: 45000
+
+databases:
+  - name: healthsync-db
+    plan: free
+    region: oregon

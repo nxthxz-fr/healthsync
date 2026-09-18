@@ -1,0 +1,6 @@
+{
+  "name": "HealthSync - Intelligent IoT Remote Patient Monitoring",
+  "description": "Clinical-grade IoT remote patient monitoring dashboard connected to ESP32 medical devices with deterministic multi-parameter risk analysis and real-time emergency alerting.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

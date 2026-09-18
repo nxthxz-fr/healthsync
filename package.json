@@ -1,0 +1,16 @@
+{
+  "name": "healthsync-project",
+  "version": "1.0.0",
+  "description": "HealthSync: IoT-Enabled Remote Patient Health Monitoring Platform",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -n \"backend,frontend\" -c \"blue,cyan\" \"npm --prefix backend run dev\" \"npm --prefix frontend run dev\"",
+    "dev:backend": "npm --prefix backend run dev",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "start": "npm --prefix backend start",
+    "test:api": "node backend/test_api.js"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

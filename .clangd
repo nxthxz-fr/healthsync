@@ -1,0 +1,4 @@
+If:
+  PathMatch: .*(\\.ino|esp32/.*)
+Diagnostics:
+  Suppress: ["*"]
