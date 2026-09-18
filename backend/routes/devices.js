@@ -119,10 +119,10 @@ router.post('/', async (req, res) => {
       await db.prepare(`
         UPDATE DEVICES SET
           patientId = ?,
-          deviceName = COALESCE(?, deviceName),
+          deviceName = ?,
           lastSeen = ?
         WHERE deviceId = ?
-      `).run(patientId || existing.patientId, deviceName, now, deviceId);
+      `).run(patientId || existing.patientId, deviceName || existing.deviceName, now, deviceId);
     } else {
       await db.prepare(`
         INSERT INTO DEVICES (deviceId, patientId, deviceName, connectionStatus, lastSeen, createdAt)

@@ -64,7 +64,7 @@ let pool = null;
 let sqliteDb = null;
 
 if (isPostgres) {
-  console.log('[Database] Connecting to Persistent PostgreSQL database...');
+  console.log('[Database] Connecting to Persistent PostgreSQL database (Neon/Cloud)...');
   const useSsl =
     process.env.NODE_ENV === 'production' ||
     databaseUrl.includes('neon.tech') ||
@@ -74,6 +74,14 @@ if (isPostgres) {
   pool = new pg.Pool({
     connectionString: databaseUrl,
     ssl: useSsl ? { rejectUnauthorized: false } : false,
+    max: 10,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 10000,
+  });
+
+  // Handle idle client disconnects cleanly (vital for Neon serverless auto-suspend)
+  pool.on('error', (err) => {
+    console.error('[Database] Unexpected PostgreSQL pool client error:', err.message);
   });
 } else {
   // SQLite Local Development Engine
@@ -220,6 +228,11 @@ export async function initDatabase() {
       CREATE INDEX IF NOT EXISTS idx_alerts_ack ON ALERTS (acknowledged);
       CREATE INDEX IF NOT EXISTS idx_devices_patient ON DEVICES (patientId);
     `);
+
+    // Ensure heartRate is nullable in case table was previously created with NOT NULL
+    try {
+      await pool.query('ALTER TABLE TELEMETRY ALTER COLUMN heartRate DROP NOT NULL');
+    } catch (e) {}
   } else {
     console.log('[Database] Initializing SQLite schema & tables...');
     const schemaPath = path.join(__dirname, 'schema.sql');
